@@ -16,6 +16,7 @@ This library has been created to make web requests to common shipping carriers u
   - Get Rates
   - Validate Address
   - Validate Address with Street
+  - NEW: TransitTime
 * [FedEx](http://www.fedex.com) (These listed features work, but still need more options added)
   - Create Shipment
   - Void Shipment
@@ -79,6 +80,26 @@ into create_shipment and accept_shipment.
       pkg_list << Omniship::Package.new(weight.to_i,[length.to_i,width.to_i,height.to_i],:units => :imperial, :package_type => package_type)
       return pkg_list
     end
+
+    def ups_check_transit_time
+      ups = Omniship::UPS.new(:login => @user, :password => @password, :key => @key)
+      origin_postcode = "10012"
+      destination_postcode = "90210"
+      method_business_days = ups.transit_time(origin_postcode, destination_postcode, {})
+      
+      return method_business_days
+      #sample response
+      #{"1DMS"=>"1", "1DAS"=>"1", "1DM"=>"1", "1DA"=>"1", "1DP"=>"1", "2DM"=>"2", "2DA"=>"2", "3DS"=>"3", "GND"=>"4"}
+    end
+
+
+    def ups_check_tracking_code
+      return ups.find_tracking_info("XXXXXXXXXXXXXXXXX")
+
+      #sample response
+      #{:tracking_number=>"XXXXXXXXXXXXXXXXX", :activities=>[{:status_code=>"KB", :status_dsc=>"DELIVERED", :date=>2017-01-13 13:09:00 UTC, :location=>"NEW YORK NY US"}]}
+    end
+
 
 ## Tests
 
