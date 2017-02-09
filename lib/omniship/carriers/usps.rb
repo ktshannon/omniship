@@ -156,6 +156,10 @@ module Omniship
         world_rates(origin, destination, packages, options)
       end
     end
+
+    def transit_time(origin_postcode, destination_postcode, options = {})
+     # TO DO
+    end
     
     def valid_credentials?
       # Cannot test with find_rates because USPS doesn't allow that in test mode

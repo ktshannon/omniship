@@ -102,6 +102,10 @@ module Omniship
       parse_rate_response(origin, destination, packages, response, options)
     end
 
+    def transit_time(origin_postcode, destination_postcode, options = {})
+      # TO DO
+    end
+
     def create_shipment(origin, destination, packages, options={})
       options        = @options.merge(options)
       options[:test] = options[:test].nil? ? true : options[:test]

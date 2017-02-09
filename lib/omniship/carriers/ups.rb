@@ -12,6 +12,7 @@ module Omniship
     RESOURCES = {
         :rates => 'ups.app/xml/Rate',
         :track => 'ups.app/xml/Track',
+        :timeintransit => 'ups.app/xml/TimeInTransit',
         :shipconfirm => 'ups.app/xml/ShipConfirm',
         :shipaccept => 'ups.app/xml/ShipAccept',
         :shipvoid => 'ups.app/xml/Void',
@@ -99,6 +100,7 @@ module Omniship
       [:key, :login, :password]
     end
 
+
     def find_rates(origin, destination, packages, options={})
       origin, destination = upsified_location(origin), upsified_location(destination)
       options             = @options.merge(options)
@@ -110,13 +112,22 @@ module Omniship
       parse_rate_response(origin, destination, packages, response, options)
     end
 
+    def transit_time(origin_postcode, destination_postcode, options={})
+      options             = @options.merge(options)
+      options[:test]      = options[:test].nil? ? false : options[:test]
+      access_request      = build_access_request
+      transit_request        = build_transit_time(origin_postcode, destination_postcode, options)
+      response            = commit(:timeintransit, save_request(access_request.gsub("\n", "") + transit_request.gsub("\n", "")), options[:test])
+      parse_transit_time_response(response, options)
+    end
+
     def find_tracking_info(tracking_number, options={})
       options          = @options.update(options)
       options[:test]   = options[:test].nil? ? false : options[:test]
       access_request   = build_access_request
       tracking_request = build_tracking_request(tracking_number, options)
       response         = commit(:track, save_request(access_request.gsub("\n", "") + tracking_request.gsub("\n", "")), options[:test])
-      # parse_tracking_response(response, options)
+      parse_tracking_response(response, options)
     end
 
     # Creating shipping functionality for UPS
@@ -361,6 +372,53 @@ module Omniship
             xml.StateProvinceCode state
             xml.CountryCode country_code
             xml.PostalCode zip_code
+          }
+        }
+      end
+      builder.to_xml
+    end
+
+    def build_transit_time(origin_postcode, destination_postcode, options={})
+      cutoff = options[:pickup_cutoff] || "3pm" # time of pickup cutoff
+
+      if (DateTime.now > (Time.parse cutoff))
+        pickup_date = DateTime.now + 2.days
+      else
+        pickup_date = DateTime.now + 1.days
+      end
+
+      if options[:pickup_days_postpone] # allow a buffer for extra days
+        pickup_date = pickup_date + options[:pickup_days_postpone].days
+      end
+
+      builder = Nokogiri::XML::Builder.new do |xml|
+        xml.TimeInTransitRequest {
+          xml.Request {
+            xml.RequestAction 'TimeInTransit'
+             xml.TransactionReference {
+              xml.XpciVersion "1.0002"
+            }
+          }
+          pickup_type = options[:pickup_type] || :daily_pickup
+          xml.TotalPackagesInShipment '1'
+          xml.ShipmentWeight {
+            xml.UnitOfMeasurement {
+              xml.Code 'LBS'
+            }
+            xml.Weight '5'
+          }
+          xml.PickupDate pickup_date.strftime("%Y%m%d")
+          xml.TransitFrom {
+            xml.AddressArtifactFormat {
+              xml.CountryCode "US"
+              xml.PostcodePrimaryLow origin_postcode
+            }
+          }
+          xml.TransitTo {
+            xml.AddressArtifactFormat {
+              xml.CountryCode "US"
+              xml.PostcodePrimaryLow destination_postcode
+            }
           }
         }
       end
@@ -627,10 +685,22 @@ module Omniship
       return @response_text
     end
 
+    def parse_transit_time_response(response, options={})
+      xml = Nokogiri::XML(response)
+      success = response_success?(xml)
+
+      @response_text = {}
+
+      xml.xpath('//ServiceSummary').each do |service|
+        @response_text[service.xpath('Service/Code').text] = service.xpath('EstimatedArrival/BusinessTransitDays').text
+      end
+      return @response_text
+    end
+
     def parse_ship_accept_response(response, options={})
       xml = Nokogiri::XML(response)
-      puts xml
       success = response_success?(xml)
+
       @response_text = {}
 
       if success
